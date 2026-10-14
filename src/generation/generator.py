@@ -50,10 +50,10 @@ class PersonalizationPipeline:
         self.max_context_tokens = max_context_tokens
 
         # Baseline handlers
-        self.b1_handler = StaticBaseline(cache=self.cache)
+        self.b1_handler = StaticBaseline(cache=self.cache, model=self.model_manager)
         self.b2_handler = RetrievalBaseline(top_k=3, max_tokens=max_context_tokens)
-        self.b3_handler = DynamicTaskExtractor(cache=self.cache)
-        self.b4_handler = ContextAwarePreferenceExtractor(cache=self.cache, temporal_half_life=temporal_half_life)
+        self.b3_handler = DynamicTaskExtractor(cache=self.cache, model=self.model_manager)
+        self.b4_handler = ContextAwarePreferenceExtractor(cache=self.cache, model=self.model_manager, temporal_half_life=temporal_half_life)
 
     def run_baseline(
         self,
@@ -63,6 +63,7 @@ class PersonalizationPipeline:
         context: str,
         history: List[Interaction],
         max_rules: int = 5,
+        max_tokens: Optional[int] = None,
     ) -> GenerationResult:
         """Run a single baseline evaluation on a target query."""
         extraction_time = 0.0
@@ -82,22 +83,23 @@ class PersonalizationPipeline:
 
         elif baseline_id == "B1":
             # Static preference profile
-            profile_res = self.b1_handler.extract_profile(user_id=user_id, history=history)
+            profile_res = self.b1_handler.extract_profile(user_id=user_id, history=history, max_rules=max_rules)
             inferred_rules = profile_res.rules
-            prompt = self.b1_handler.format_prompt(query, profile_res, max_rules=max_rules)
+            prompt = self.b1_handler.format_prompt(query, profile_res, max_rules=max_rules, max_tokens=max_tokens)
 
         elif baseline_id == "B2":
             # Retrieval-augmented personalization (RAG)
-            retrieved = self.b2_handler.retrieve(query=query, history=history)
+            retrieval_tool = RetrievalBaseline(top_k=3, max_tokens=max_tokens or self.max_context_tokens)
+            retrieved = retrieval_tool.retrieve(query=query, history=history)
             retrieved_ids = [h.interaction_id for h in retrieved]
-            prompt = self.b2_handler.format_prompt(query, retrieved)
+            prompt = retrieval_tool.format_prompt(query, retrieved)
             meta["retrieved_ids"] = retrieved_ids
 
         elif baseline_id == "B3":
             # Dynamic task-only extraction
             task_res = self.b3_handler.extract(user_id=user_id, query=query, history=history, max_rules=max_rules)
             inferred_rules = task_res.rules
-            rules_prompt = task_res.to_steering_prompt(max_rules=max_rules)
+            rules_prompt = task_res.to_steering_prompt(max_rules=max_rules, max_tokens=max_tokens)
             prompt = (
                 f"<|system|>\nYou are an AI assistant. Comply with the user's inferred preferences for this task:\n"
                 f"{rules_prompt}\n"
@@ -109,7 +111,7 @@ class PersonalizationPipeline:
             # Context-Aware Preference Learning (CAPL)
             capl_res = self.b4_handler.extract(user_id=user_id, query=query, history=history, max_rules=max_rules)
             inferred_rules = capl_res.rules
-            rules_prompt = capl_res.to_steering_prompt(max_rules=max_rules)
+            rules_prompt = capl_res.to_steering_prompt(max_rules=max_rules, max_tokens=max_tokens)
             meta.update(capl_res.metadata)
             prompt = (
                 f"<|system|>\nYou are an AI assistant. Strictly adhere to these context-scoped user preferences:\n"

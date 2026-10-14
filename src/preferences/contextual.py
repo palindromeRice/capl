@@ -62,6 +62,128 @@ def classify_query_context(query: str) -> str:
     return "casual_chat"
 
 
+def parse_preference_rules_json(raw_text: str) -> List[InferredPreferenceRule]:
+    """Parse JSON preference rules emitted by an LLM agent with robust error recovery."""
+    cleaned = raw_text.strip()
+    match = re.search(r"```(?:json)?\s*(\[.*?\])\s*```", cleaned, re.DOTALL)
+    if match:
+        json_str = match.group(1)
+    else:
+        match_arr = re.search(r"\[\s*\{.*\}\s*\]", cleaned, re.DOTALL)
+        if match_arr:
+            json_str = match_arr.group(0)
+        else:
+            json_str = cleaned
+
+    try:
+        data = json.loads(json_str)
+        if not isinstance(data, list):
+            if isinstance(data, dict):
+                data = data.get("rules", [data])
+            else:
+                return []
+
+        parsed_rules: List[InferredPreferenceRule] = []
+        for idx, item in enumerate(data, 1):
+            if not isinstance(item, dict):
+                continue
+            r_id = str(item.get("rule_id", f"rule_llm_{idx}"))
+            pref = str(item.get("preference", "")).strip()
+            if not pref:
+                continue
+            aspect = str(item.get("target_aspect", "style")).strip()
+            ctx = str(item.get("context_condition", "general")).strip()
+            ev_ids = [str(e) for e in item.get("supporting_evidence_ids", [])]
+            try:
+                conf = float(item.get("confidence", 0.8))
+            except (ValueError, TypeError):
+                conf = 0.8
+            conflict_detected = bool(item.get("conflict_detected", False))
+            conflict_details = item.get("conflict_details")
+            try:
+                recency = float(item.get("recency_weight", 1.0))
+            except (ValueError, TypeError):
+                recency = 1.0
+
+            parsed_rules.append(
+                InferredPreferenceRule(
+                    rule_id=r_id,
+                    preference=pref,
+                    target_aspect=aspect,
+                    context_condition=ctx,
+                    supporting_evidence_ids=ev_ids,
+                    confidence=min(1.0, max(0.0, conf)),
+                    conflict_detected=conflict_detected,
+                    conflict_details=conflict_details,
+                    recency_weight=recency,
+                )
+            )
+        return parsed_rules
+    except Exception as e:
+        logger.debug("Failed parsing LLM preference rules JSON: %s", e)
+        return []
+
+
+def format_history_for_prompt(history: List[Interaction], max_items: int = 8) -> str:
+    """Format past interaction history into concise text for the preference agent prompt."""
+    lines = []
+    for h in history[-max_items:]:
+        lines.append(
+            f"--- Interaction {h.interaction_id} (Context: {h.context}, Step: {h.step}) ---\n"
+            f"User Query: {h.query}\n"
+            f"User Response: {h.user_response[:220]}\n"
+        )
+    return "\n".join(lines)
+
+
+def build_static_extraction_prompt(user_id: str, history: List[Interaction]) -> str:
+    history_text = format_history_for_prompt(history)
+    return (
+        f"<|system|>\n"
+        f"You are an unsupervised preference learning agent. Analyze the historical interactions below across all domains.\n"
+        f"Infer persistent, general stylistic and formatting preferences of user {user_id}.\n"
+        f"Output MUST be a JSON array of preference rule objects conforming to:\n"
+        f'[\n  {{"rule_id": "rule_1", "preference": "...", "target_aspect": "verbosity/structure/salutation/code_style", "context_condition": "general", "supporting_evidence_ids": ["int_..."], "confidence": 0.85}}\n]\n'
+        f"<|user|>\n"
+        f"History:\n{history_text}\n"
+        f"Extract general preference rules in JSON.\n"
+        f"<|assistant|>\n"
+    )
+
+
+def build_dynamic_task_prompt(user_id: str, query: str, history: List[Interaction]) -> str:
+    history_text = format_history_for_prompt(history)
+    return (
+        f"<|system|>\n"
+        f"You are an unsupervised preference learning agent. Given user {user_id}'s interaction history and the target query:\n"
+        f"'{query}'\n"
+        f"Infer task-specific preferences relevant to this query.\n"
+        f"Output MUST be a JSON array of preference rule objects conforming to:\n"
+        f'[\n  {{"rule_id": "rule_1", "preference": "...", "target_aspect": "verbosity/structure/salutation/code_style", "context_condition": "task_specific", "supporting_evidence_ids": ["int_..."], "confidence": 0.85}}\n]\n'
+        f"<|user|>\n"
+        f"History:\n{history_text}\n"
+        f"Extract task-specific preference rules for query '{query}' in JSON.\n"
+        f"<|assistant|>\n"
+    )
+
+
+def build_context_aware_prompt(user_id: str, query: str, detected_context: str, history: List[Interaction]) -> str:
+    history_text = format_history_for_prompt(history)
+    return (
+        f"<|system|>\n"
+        f"You are a Context-Aware Preference Learning (CAPL) agent. Given user {user_id}'s history and target query under context '{detected_context}':\n"
+        f"1. Decompose preferences strictly applicable to context '{detected_context}'.\n"
+        f"2. Detect opposing/conflicting preferences in other contexts and flag them.\n"
+        f"3. Weight recent interactions higher to adapt to temporal changes.\n"
+        f"Output MUST be a JSON array of preference rule objects conforming to:\n"
+        f'[\n  {{"rule_id": "rule_1", "preference": "...", "target_aspect": "verbosity/structure/salutation/code_style", "context_condition": "{detected_context}", "supporting_evidence_ids": ["int_..."], "confidence": 0.9, "conflict_detected": true, "conflict_details": "...", "recency_weight": 0.95}}\n]\n'
+        f"<|user|>\n"
+        f"History:\n{history_text}\n"
+        f"Extract context-aware preference rules for context '{detected_context}' in JSON.\n"
+        f"<|assistant|>\n"
+    )
+
+
 # -----------------------------------------------------------------------------
 # B1: Static Preference Profile Extractor
 # -----------------------------------------------------------------------------
@@ -86,6 +208,26 @@ class StaticProfileExtractor:
                 rules=[],
                 raw_response="No history available.",
             )
+
+        # Try LLM preference extraction if model is available
+        if self.model is not None and hasattr(self.model, "generate_with_pref_agent"):
+            try:
+                prompt = build_static_extraction_prompt(user_id, history)
+                raw_res = self.model.generate_with_pref_agent(prompt)
+                llm_rules = parse_preference_rules_json(raw_res)
+                if llm_rules:
+                    result = PreferenceExtractionResult(
+                        user_id=user_id,
+                        query_context="general",
+                        method="B1_static",
+                        rules=llm_rules[:max_rules],
+                        raw_response=raw_res,
+                    )
+                    if self.cache:
+                        self.cache.set(user_id, "B1_static", "", len(history), result)
+                    return result
+            except Exception as e:
+                logger.warning("LLM extraction failed in B1 (%s). Falling back to heuristic aggregation.", e)
 
         # Aggregate across entire history regardless of context
         features = [analyze_interaction_features(h) for h in history]
@@ -185,6 +327,26 @@ class DynamicTaskExtractor:
                 raw_response="No history available.",
             )
 
+        # Try LLM preference extraction if model is available
+        if self.model is not None and hasattr(self.model, "generate_with_pref_agent"):
+            try:
+                prompt = build_dynamic_task_prompt(user_id, query, history)
+                raw_res = self.model.generate_with_pref_agent(prompt)
+                llm_rules = parse_preference_rules_json(raw_res)
+                if llm_rules:
+                    result = PreferenceExtractionResult(
+                        user_id=user_id,
+                        query_context=None,
+                        method="B3_dynamic",
+                        rules=llm_rules[:max_rules],
+                        raw_response=raw_res,
+                    )
+                    if self.cache:
+                        self.cache.set(user_id, "B3_dynamic", query, len(history), result)
+                    return result
+            except Exception as e:
+                logger.warning("LLM extraction failed in B3 (%s). Falling back to heuristic task extraction.", e)
+
         # Inspect historical interactions with task keyword matching, but WITHOUT context separation or temporal decay
         q_tokens = set(re.findall(r"\w+", query.lower()))
         scored_history = []
@@ -267,6 +429,29 @@ class ContextAwarePreferenceExtractor:
 
         # 1. Context Decomposition
         detected_context = classify_query_context(query)
+
+        # Try LLM context-aware preference extraction if model is available
+        if self.model is not None and hasattr(self.model, "generate_with_pref_agent"):
+            try:
+                prompt = build_context_aware_prompt(user_id, query, detected_context, history)
+                raw_res = self.model.generate_with_pref_agent(prompt)
+                llm_rules = parse_preference_rules_json(raw_res)
+                if llm_rules:
+                    has_conflict = any(r.conflict_detected for r in llm_rules)
+                    result = PreferenceExtractionResult(
+                        user_id=user_id,
+                        query_context=detected_context,
+                        method="B4_contextual",
+                        rules=llm_rules[:max_rules],
+                        raw_response=raw_res,
+                        metadata={"conflict_detected": has_conflict, "context": detected_context},
+                    )
+                    if self.cache:
+                        self.cache.set(user_id, "B4_contextual", query, len(history), result)
+                    return result
+            except Exception as e:
+                logger.warning("LLM extraction failed in B4 (%s). Falling back to algorithmic contextual synthesis.", e)
+
         current_step = max(h.step for h in history) + 1
 
         # 2. Context Partitioning & Temporal Weighting

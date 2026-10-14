@@ -43,6 +43,8 @@ class BenchmarkEvaluator:
         users: List[UserHistory],
         baselines: List[str] = ["B0", "B1", "B2", "B3", "B4"],
         max_samples_per_user: Optional[int] = None,
+        max_rules: int = 5,
+        max_tokens: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Run full evaluation suite across users and baselines."""
         all_generation_results: List[GenerationResult] = []
@@ -79,6 +81,8 @@ class BenchmarkEvaluator:
                         query=sample.query,
                         context=sample.context,
                         history=user.history,
+                        max_rules=max_rules,
+                        max_tokens=max_tokens,
                     )
                     sample_results[b] = gen_res
                     all_generation_results.append(gen_res)

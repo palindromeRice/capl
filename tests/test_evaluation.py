@@ -77,3 +77,59 @@ def test_evaluate_preference_inference() -> None:
     assert res.recall > 0.8
     assert res.f1 > 0.8
     assert res.context_accuracy == 1.0
+
+
+def test_conflict_resolution_rate_metric() -> None:
+    gt_rules = [
+        GroundTruthRule(
+            rule_id="r1",
+            target_aspect="verbosity",
+            context_condition="technical_engineering",
+            preference_statement="Keep responses concise and under 100 words.",
+        )
+    ]
+
+    # 1. Leaking an opposing context without conflict detection
+    leaked_inferred = [
+        {"target_aspect": "verbosity", "context_condition": "executive_briefing", "preference": "Elaborate explanations", "conflict_detected": False}
+    ]
+    res_leak = evaluate_preference_inference(leaked_inferred, gt_rules, target_context="technical_engineering")
+    assert res_leak.conflict_resolution_rate == 0.0
+
+    # 2. Flagging conflict explicitly
+    flagged_inferred = [
+        {"target_aspect": "verbosity", "context_condition": "technical_engineering", "preference": "Keep responses concise", "conflict_detected": True}
+    ]
+    res_flag = evaluate_preference_inference(flagged_inferred, gt_rules, target_context="technical_engineering")
+    assert res_flag.conflict_resolution_rate == 1.0
+
+
+def test_combined_criteria_satisfaction() -> None:
+    # Text with warm greeting but without forbidden word "informal"
+    resp = "Greetings,\nHere is the answer.\nSincerely,\nTeam"
+    crit = {
+        "forbidden_phrases": ["informal", "slang"],
+        "required_elements": ["salutation_present"],
+    }
+    score, checks = evaluate_deterministic_satisfaction(resp, crit)
+    assert score == 1.0
+    assert checks["salutation_satisfied"] is True
+
+
+def test_evaluate_users_max_rules() -> None:
+    from src.data.synthetic import generate_synthetic_dataset
+    from src.generation.generator import PersonalizationPipeline
+    from src.models.loader import ModelConfig, ModelManager
+    from src.evaluation.evaluate import BenchmarkEvaluator
+
+    users = generate_synthetic_dataset(num_users=1, interactions_per_user=6, seed=42)
+    pref_cfg = ModelConfig(model_id="Qwen/Qwen3.5-2B")
+    main_cfg = ModelConfig(model_id="Qwen/Qwen3.5-9B")
+    mm = ModelManager(pref_config=pref_cfg, main_config=main_cfg, mock_mode=True)
+    pipeline = PersonalizationPipeline(model_manager=mm)
+    evaluator = BenchmarkEvaluator(pipeline=pipeline, output_dir=".cache/test_eval_rules")
+
+    sum_1 = evaluator.evaluate_users(users=users, baselines=["B4"], max_samples_per_user=1, max_rules=1)
+    sum_3 = evaluator.evaluate_users(users=users, baselines=["B4"], max_samples_per_user=1, max_rules=3)
+    assert "baselines" in sum_1
+    assert "baselines" in sum_3

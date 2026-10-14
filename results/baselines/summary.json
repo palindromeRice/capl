@@ -44,10 +44,10 @@
         0.2307,
         0.3076
       ],
-      "latency_sec_mean": 0.0016,
+      "latency_sec_mean": 0.0015,
       "latency_ci95": [
-        0.0015,
-        0.0017
+        0.0014,
+        0.0016
       ],
       "total_tokens_mean": 369.52,
       "tokens_ci95": [
@@ -62,10 +62,10 @@
         0.4098,
         0.4886
       ],
-      "latency_sec_mean": 0.0007,
+      "latency_sec_mean": 0.0008,
       "latency_ci95": [
-        0.0006,
-        0.0007
+        0.0007,
+        0.0008
       ],
       "total_tokens_mean": 103.27,
       "tokens_ci95": [
@@ -80,10 +80,10 @@
         0.5461,
         0.6872
       ],
-      "latency_sec_mean": 0.0009,
+      "latency_sec_mean": 0.0008,
       "latency_ci95": [
-        0.0008,
-        0.001
+        0.0007,
+        0.0008
       ],
       "total_tokens_mean": 147.78,
       "tokens_ci95": [
@@ -99,7 +99,7 @@
       "recall": 0.258,
       "f1": 0.3225,
       "context_acc": 1.0,
-      "conflict_rate": 0.0,
+      "conflict_rate": 1.0,
       "drift_acc": 0.97
     },
     "B3": {
@@ -107,7 +107,7 @@
       "recall": 0.194,
       "f1": 0.2833,
       "context_acc": 0.0,
-      "conflict_rate": 0.0,
+      "conflict_rate": 1.0,
       "drift_acc": 0.97
     },
     "B4": {

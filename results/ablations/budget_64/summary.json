@@ -1,0 +1,76 @@
+{
+  "num_users": 10,
+  "total_samples": 20,
+  "baselines": {
+    "B2": {
+      "satisfaction_mean": 0.3375,
+      "satisfaction_ci95": [
+        0.2286,
+        0.4464
+      ],
+      "latency_sec_mean": 0.0014,
+      "latency_ci95": [
+        0.0013,
+        0.0015
+      ],
+      "total_tokens_mean": 207.35,
+      "tokens_ci95": [
+        206.6074,
+        1.0
+      ],
+      "peak_vram_mb": 0.0
+    },
+    "B4": {
+      "satisfaction_mean": 0.6083,
+      "satisfaction_ci95": [
+        0.4886,
+        0.7281
+      ],
+      "latency_sec_mean": 0.0006,
+      "latency_ci95": [
+        0.0006,
+        0.0006
+      ],
+      "total_tokens_mean": 112.35,
+      "tokens_ci95": [
+        111.6074,
+        1.0
+      ],
+      "peak_vram_mb": 0.0
+    }
+  },
+  "inference_metrics": {
+    "B1": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "context_acc": 0.0,
+      "conflict_rate": 0.0,
+      "drift_acc": 0.0
+    },
+    "B3": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "context_acc": 0.0,
+      "conflict_rate": 0.0,
+      "drift_acc": 0.0
+    },
+    "B4": {
+      "precision": 0.425,
+      "recall": 0.34,
+      "f1": 0.3778,
+      "context_acc": 0.5,
+      "conflict_rate": 1.0,
+      "drift_acc": 1.0
+    }
+  },
+  "pairwise_win_rates": {
+    "B4_vs_B2": {
+      "wins": 15,
+      "losses": 0,
+      "ties": 5,
+      "win_rate": 0.75
+    }
+  }
+}

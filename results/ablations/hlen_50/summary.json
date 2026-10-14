@@ -1,75 +1,75 @@
 {
-  "num_users": 20,
-  "total_samples": 40,
+  "num_users": 10,
+  "total_samples": 20,
   "baselines": {
     "B1": {
-      "satisfaction_mean": 0.5542,
+      "satisfaction_mean": 0.5583,
       "satisfaction_ci95": [
-        0.4848,
-        0.6235
+        0.462,
+        0.6547
       ],
-      "latency_sec_mean": 0.0016,
+      "latency_sec_mean": 0.0005,
       "latency_ci95": [
-        0.0012,
-        0.0019
+        0.0003,
+        0.0006
       ],
-      "total_tokens_mean": 103.525,
+      "total_tokens_mean": 103.8,
       "tokens_ci95": [
-        102.9506,
+        102.9758,
         1.0
       ],
       "peak_vram_mb": 0.0
     },
     "B2": {
-      "satisfaction_mean": 0.2833,
+      "satisfaction_mean": 0.2875,
       "satisfaction_ci95": [
-        0.2196,
-        0.3471
+        0.1977,
+        0.3773
       ],
-      "latency_sec_mean": 0.0045,
+      "latency_sec_mean": 0.0015,
       "latency_ci95": [
-        0.0039,
-        0.005
+        0.0015,
+        0.0016
       ],
-      "total_tokens_mean": 364.625,
+      "total_tokens_mean": 366.1,
       "tokens_ci95": [
-        351.2353,
+        347.2708,
         1.0
       ],
       "peak_vram_mb": 0.0
     },
     "B3": {
-      "satisfaction_mean": 0.4708,
+      "satisfaction_mean": 0.475,
       "satisfaction_ci95": [
-        0.4128,
-        0.5289
+        0.3878,
+        0.5622
       ],
-      "latency_sec_mean": 0.0014,
+      "latency_sec_mean": 0.0007,
       "latency_ci95": [
-        0.0013,
-        0.0015
+        0.0006,
+        0.0009
       ],
-      "total_tokens_mean": 105.025,
+      "total_tokens_mean": 104.75,
       "tokens_ci95": [
-        101.1261,
+        99.0749,
         1.0
       ],
       "peak_vram_mb": 0.0
     },
     "B4": {
-      "satisfaction_mean": 0.5583,
+      "satisfaction_mean": 0.5375,
       "satisfaction_ci95": [
-        0.4431,
-        0.6736
+        0.3656,
+        0.7094
       ],
-      "latency_sec_mean": 0.0034,
+      "latency_sec_mean": 0.0008,
       "latency_ci95": [
-        0.0027,
-        0.0041
+        0.0006,
+        0.0009
       ],
-      "total_tokens_mean": 148.25,
+      "total_tokens_mean": 148.6,
       "tokens_ci95": [
-        145.2579,
+        144.4461,
         1.0
       ],
       "peak_vram_mb": 0.0
@@ -77,48 +77,48 @@
   },
   "inference_metrics": {
     "B1": {
-      "precision": 0.425,
-      "recall": 0.255,
-      "f1": 0.3187,
+      "precision": 0.4333,
+      "recall": 0.26,
+      "f1": 0.325,
       "context_acc": 1.0,
-      "conflict_rate": 0.0,
-      "drift_acc": 0.95
+      "conflict_rate": 1.0,
+      "drift_acc": 1.0
     },
     "B3": {
       "precision": 0.55,
-      "recall": 0.205,
-      "f1": 0.2964,
+      "recall": 0.21,
+      "f1": 0.3024,
       "context_acc": 0.0,
-      "conflict_rate": 0.0,
-      "drift_acc": 0.95
+      "conflict_rate": 1.0,
+      "drift_acc": 1.0
     },
     "B4": {
-      "precision": 0.625,
+      "precision": 0.6208,
       "recall": 0.46,
-      "f1": 0.5278,
-      "context_acc": 0.775,
-      "conflict_rate": 0.775,
-      "drift_acc": 0.95
+      "f1": 0.5264,
+      "context_acc": 0.75,
+      "conflict_rate": 0.75,
+      "drift_acc": 1.0
     }
   },
   "pairwise_win_rates": {
     "B4_vs_B1": {
-      "wins": 21,
-      "losses": 19,
+      "wins": 10,
+      "losses": 10,
       "ties": 0,
-      "win_rate": 0.525
+      "win_rate": 0.5
     },
     "B4_vs_B2": {
-      "wins": 21,
+      "wins": 10,
       "losses": 0,
-      "ties": 19,
-      "win_rate": 0.525
+      "ties": 10,
+      "win_rate": 0.5
     },
     "B4_vs_B3": {
-      "wins": 21,
-      "losses": 9,
-      "ties": 10,
-      "win_rate": 0.525
+      "wins": 10,
+      "losses": 5,
+      "ties": 5,
+      "win_rate": 0.5
     }
   }
 }

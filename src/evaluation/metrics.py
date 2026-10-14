@@ -96,8 +96,19 @@ def evaluate_preference_inference(
     f1 = (2 * precision * recall) / max(precision + recall, 1e-6)
     context_acc = context_matches / max(len(inferred_rules), 1)
     
-    # Conflict resolution: Did the model avoid applying a conflicting other-context rule?
-    conflict_res_rate = 1.0 if any(inf.get("conflict_detected", False) for inf in inferred_rules) or inf_ctx == target_context else 0.0
+    # Conflict resolution: Did the model avoid applying conflicting foreign context rules or properly flag conflicts?
+    foreign_leaks = [
+        inf for inf in inferred_rules
+        if inf.get("context_condition") not in [target_context, "general", "task_specific"]
+        and not inf.get("conflict_detected", False)
+    ]
+    if any(inf.get("conflict_detected", False) for inf in inferred_rules):
+        conflict_res_rate = 1.0
+    elif foreign_leaks:
+        conflict_res_rate = 0.0
+    else:
+        conflict_res_rate = 1.0 if inferred_rules else 0.0
+
     drift_acc = (drift_correct / max(len(deprecated_gt), 1)) if has_temporal_drift and deprecated_gt else 1.0
 
     return InferenceMetricResult(
@@ -131,12 +142,16 @@ def evaluate_deterministic_satisfaction(response_text: str, criteria: Dict[str, 
         elif req == "numbered":
             checks["structure_satisfied"] = bool(re.search(r"^\s*\d+\.\s+", response_text, re.MULTILINE))
 
-    # 3. Salutation check
+    # 3. Salutation / phrasing check
     if criteria.get("forbidden_phrases"):
         has_forbidden = any(phrase in text_low for phrase in criteria["forbidden_phrases"])
         checks["salutation_satisfied"] = not has_forbidden
-    elif "salutation_present" in criteria.get("required_elements", []):
-        checks["salutation_satisfied"] = any(w in text_low for w in ["greetings", "hello", "sincerely", "cheers", "best regards"])
+    if "salutation_present" in criteria.get("required_elements", []):
+        has_salut = any(w in text_low for w in ["greetings", "hello", "sincerely", "cheers", "best regards"])
+        if "salutation_satisfied" in checks:
+            checks["salutation_satisfied"] = checks["salutation_satisfied"] and has_salut
+        else:
+            checks["salutation_satisfied"] = has_salut
 
     # 4. Code check
     if criteria.get("requires_code"):

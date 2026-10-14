@@ -36,8 +36,8 @@ class PreferenceExtractionResult(BaseModel):
     raw_response: str
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
-    def to_steering_prompt(self, max_rules: int = 5) -> str:
-        """Render rules into natural language instructions for the main generator."""
+    def to_steering_prompt(self, max_rules: int = 5, max_tokens: Optional[int] = None) -> str:
+        """Render rules into natural language instructions for the main generator, with optional token budget control."""
         if not self.rules:
             return ""
         
@@ -45,7 +45,12 @@ class PreferenceExtractionResult(BaseModel):
         lines = ["User Personalization Preferences to adhere to strictly:"]
         for idx, r in enumerate(selected, 1):
             ctx_str = f" [Applicable in: {r.context_condition}]" if r.context_condition != "general" else ""
-            lines.append(f"{idx}. {r.preference}{ctx_str} (Confidence: {r.confidence:.2f})")
+            rule_line = f"{idx}. {r.preference}{ctx_str} (Confidence: {r.confidence:.2f})"
+            if max_tokens is not None:
+                curr_text = "\n".join(lines + [rule_line])
+                if (len(curr_text.split()) * 4 // 3) > max_tokens and len(lines) > 1:
+                    break
+            lines.append(rule_line)
         return "\n".join(lines)
 
 
