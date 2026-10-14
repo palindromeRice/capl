@@ -1,0 +1,84 @@
+# Configuration for Context-Aware Unsupervised Human Preference Learning (CAPL)
+
+project:
+  name: "capl-research"
+  seed: 42
+  results_dir: "results"
+  cache_dir: ".cache/preferences"
+
+models:
+  preference_agent:
+    model_id: "Qwen/Qwen3.5-2B"
+    fallback_id: "Qwen/Qwen2.5-3B-Instruct"
+    load_in_4bit: true
+    bnb_4bit_quant_type: "nf4"
+    bnb_4bit_use_double_quant: true
+    compute_dtype: "bfloat16"
+    max_new_tokens: 512
+    temperature: 0.1
+    top_p: 0.95
+
+  main_generator:
+    model_id: "Qwen/Qwen3.5-9B"
+    fallback_id: "Qwen/Qwen2.5-7B-Instruct"
+    load_in_4bit: true
+    bnb_4bit_quant_type: "nf4"
+    bnb_4bit_use_double_quant: true
+    compute_dtype: "bfloat16"
+    max_new_tokens: 512
+    temperature: 0.0 # Deterministic baseline comparison
+    top_p: 1.0
+
+compute:
+  device: "auto" # "auto", "cuda", "mps", "cpu"
+  target_gpu: "NVIDIA L4"
+  max_vram_gb: 24.0
+  sequential_loading: false # Automatically set to true if VRAM < 16GB
+  flush_gpu_memory: true
+  mock_inference: false # Set true for lightning-fast testing and CI
+
+dataset:
+  name: "synthetic_contextual_pilot"
+  num_users: 50
+  interactions_per_user: 20
+  contexts:
+    - "technical_engineering"
+    - "executive_briefing"
+    - "educational_tutoring"
+    - "casual_chat"
+  conflict_rate: 0.35
+  temporal_drift_rate: 0.25
+  test_queries_per_user: 4
+  leakage_prevention: true
+
+baselines:
+  - id: "B0"
+    name: "Zero-Shot (No Personalization)"
+    type: "none"
+  - id: "B1"
+    name: "Static Preference Profile"
+    type: "static"
+  - id: "B2"
+    name: "Retrieval-Augmented Personalization (RAG)"
+    type: "retrieval"
+    top_k: 3
+  - id: "B3"
+    name: "Dynamic Task-Only Extraction"
+    type: "dynamic"
+  - id: "B4"
+    name: "Context-Aware Preference Learning (CAPL)"
+    type: "contextual"
+
+token_budget:
+  matched: true
+  max_context_tokens: 256
+
+ablations:
+  history_lengths: [5, 10, 20, 50]
+  rule_limits: [1, 2, 3, 5]
+  temporal_half_lives: [5, 10, 20]
+
+evaluation:
+  deterministic_checks: true
+  blinded_pairwise: true
+  confidence_level: 0.95

@@ -1,0 +1,124 @@
+{
+  "num_users": 20,
+  "total_samples": 40,
+  "baselines": {
+    "B1": {
+      "satisfaction_mean": 0.5542,
+      "satisfaction_ci95": [
+        0.4848,
+        0.6235
+      ],
+      "latency_sec_mean": 0.0016,
+      "latency_ci95": [
+        0.0012,
+        0.0019
+      ],
+      "total_tokens_mean": 103.525,
+      "tokens_ci95": [
+        102.9506,
+        1.0
+      ],
+      "peak_vram_mb": 0.0
+    },
+    "B2": {
+      "satisfaction_mean": 0.2833,
+      "satisfaction_ci95": [
+        0.2196,
+        0.3471
+      ],
+      "latency_sec_mean": 0.0045,
+      "latency_ci95": [
+        0.0039,
+        0.005
+      ],
+      "total_tokens_mean": 364.625,
+      "tokens_ci95": [
+        351.2353,
+        1.0
+      ],
+      "peak_vram_mb": 0.0
+    },
+    "B3": {
+      "satisfaction_mean": 0.4708,
+      "satisfaction_ci95": [
+        0.4128,
+        0.5289
+      ],
+      "latency_sec_mean": 0.0014,
+      "latency_ci95": [
+        0.0013,
+        0.0015
+      ],
+      "total_tokens_mean": 105.025,
+      "tokens_ci95": [
+        101.1261,
+        1.0
+      ],
+      "peak_vram_mb": 0.0
+    },
+    "B4": {
+      "satisfaction_mean": 0.5583,
+      "satisfaction_ci95": [
+        0.4431,
+        0.6736
+      ],
+      "latency_sec_mean": 0.0034,
+      "latency_ci95": [
+        0.0027,
+        0.0041
+      ],
+      "total_tokens_mean": 148.25,
+      "tokens_ci95": [
+        145.2579,
+        1.0
+      ],
+      "peak_vram_mb": 0.0
+    }
+  },
+  "inference_metrics": {
+    "B1": {
+      "precision": 0.425,
+      "recall": 0.255,
+      "f1": 0.3187,
+      "context_acc": 1.0,
+      "conflict_rate": 0.0,
+      "drift_acc": 0.95
+    },
+    "B3": {
+      "precision": 0.55,
+      "recall": 0.205,
+      "f1": 0.2964,
+      "context_acc": 0.0,
+      "conflict_rate": 0.0,
+      "drift_acc": 0.95
+    },
+    "B4": {
+      "precision": 0.625,
+      "recall": 0.46,
+      "f1": 0.5278,
+      "context_acc": 0.775,
+      "conflict_rate": 0.775,
+      "drift_acc": 0.95
+    }
+  },
+  "pairwise_win_rates": {
+    "B4_vs_B1": {
+      "wins": 21,
+      "losses": 19,
+      "ties": 0,
+      "win_rate": 0.525
+    },
+    "B4_vs_B2": {
+      "wins": 21,
+      "losses": 0,
+      "ties": 19,
+      "win_rate": 0.525
+    },
+    "B4_vs_B3": {
+      "wins": 21,
+      "losses": 9,
+      "ties": 10,
+      "win_rate": 0.525
+    }
+  }
+}
