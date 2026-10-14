@@ -156,7 +156,7 @@ capl/
 │   ├── smoke_test.py                   # Rapid integration verification script
 │   ├── run_baselines.py                # Primary B0-B4 evaluation script
 │   └── run_experiments.py              # Ablation sweep runner
-├── tests/                              # Pytest test suite (15 unit tests)
+├── tests/                              # Pytest test suite (22 unit tests)
 └── results/                            # Benchmark outputs, CSVs, and PNG plots
 ```
 
