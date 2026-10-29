@@ -1,174 +1,156 @@
-# Context-Aware Unsupervised Human Preference Learning (CAPL)
+# CAPL: Context-Aware Preference Rules for Steering a Frozen LLM
 
-[![Python 3.10+](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-green.svg)](LICENSE)
-[![PyTorch](https://img.shields.io/badge/PyTorch-2.2+-ee4c2c.svg)](https://pytorch.org/)
-[![Hugging Face](https://img.shields.io/badge/Hugging%20Face-Transformers-yellow.svg)](https://huggingface.co/)
-[![Hardware](https://img.shields.io/badge/GPU-NVIDIA%20L4%20(24GB)-76b900.svg)](https://www.nvidia.com/en-us/data-center/l4/)
 
-A reproducible, low-compute research codebase investigating whether a lightweight language model acting as a **preference agent** can infer context-dependent human preferences from unstructured interaction histories and steer a frozen foundation LLM without fine-tuning.
+CAPL (Context-Aware Preference Learning) is research code for an exploratory pilot. A small model (Qwen3.5-2B) reads a user's interaction history and writes natural-language preference rules, each scoped to the context in which it applies. Those rules are placed in the prompt of a frozen generator (Qwen3.5-9B). No weights are updated, and both models run in 4-bit NF4 on a single NVIDIA L4 (24 GB). In a live pilot with ten synthetic users and 20 evaluation queries per method, CAPL reached 71.25% mean automated style-rule satisfaction, compared with 58.33% for a static profile, 56.67% for task-only rules and 48.75% for no personalization. **TF-IDF retrieval of past examples scored highest, at 88.33%.** These are descriptive results on synthetic data scored by deterministic style checks, not a claim of a general advantage.
 
----
+The write-up: [CAPL: Context-Aware Preference Rules for Steering a Frozen LLM](https://palindromerice.github.io/writing/capl/).
 
-## 1. Research Overview
+## Why
 
-### Research Question
-> *Can a small preference-learning agent infer context-dependent user preferences from historical interactions and improve a frozen LLM's response quality compared with static user profiles and retrieval-based personalization?*
+Preference agents (Shashidhar et al., *Unsupervised Human Preference Learning*, EMNLP 2024) personalize a large model without fine-tuning it. A small model writes natural-language rules, and the frozen large model follows them. Personalization becomes an explicit text object that you can read, not a set of weights or a pile of retrieved examples.
 
-### Proposed Architecture (CAPL)
-```text
-Historical User Interactions ({t_1, ..., t_N})
-                    |
-                    v
-    Context & Temporal Decomposition
-   (Domain Scoping + Recency Decay)
-                    |
-                    v
-       Small Quantized Preference Agent
-              (Qwen3.5-2B, 4-bit NF4)
-                    |
-                    v
-    Structured Context-Scoped Rules (JSON)
-   {"aspect", "context", "evidence", "confidence"}
-                    |
-                    v
-           Main Query + Steering Prompt
-                    |
-                    v
-         Frozen Foundation Model
-          (Qwen3.5-9B, 4-bit NF4)
-                    |
-                    v
-          Personalized Generation
+A rule such as "keep answers concise" does not say *when* it applies. The same person may want a terse debugging answer with a short code sample and a detailed executive briefing with numbered recommendations. A single unscoped rule has to average those preferences or let one overwrite the other. CAPL tests whether attaching an explicit context condition, supporting evidence and a conflict flag to every rule helps. It differs from the original preference agents in two ways: rules come from prompting a small model, not training one, and applicability is a field of the rule.
+
+## System design
+
+The pipeline has three stages. Only the prompt changes between methods. The generator is the same in every case.
+
+```mermaid
+flowchart TD
+    Q[Current query] --> C[Context identification<br/>keyword classifier]
+    H[User history] --> X
+    C --> X[Rule extraction<br/>Qwen3.5-2B, prompted, 4-bit NF4]
+    X -->|parsed JSON rules| R[Context-scoped rules]
+    X -->|failure or unparseable output| F[Algorithmic fallback<br/>exponential recency weights]
+    F --> R
+    R --> P[Steering prompt + query]
+    Q --> P
+    P --> G[Frozen generator<br/>Qwen3.5-9B, 4-bit NF4]
+    G --> O[Personalized response]
 ```
 
----
+**Context identification.** A keyword classifier maps the query to a domain such as technical engineering, executive briefing or casual chat.
 
-## 2. Benchmark Results
+**Prompted rule extraction.** The small model receives the query, the detected context and the user's recent history (the last eight entries, each historical response truncated to 220 characters). It is asked to return applicable rules, note conflicting evidence and weight recent behavior more heavily. It samples at temperature 0.1. Each rule follows a structured schema:
 
-Evaluated across a controlled 50-user pilot benchmark with multi-context conflicting preferences and temporal drift:
-
-| Baseline ID | Description | Rule Satisfaction | 95% Confidence Interval | Head-to-Head Win vs B4 | Avg Total Tokens | Peak VRAM |
-| :---: | :--- | :---: | :---: | :---: | :---: | :---: |
-| **B0** | Zero-Shot (No Personalization) | 0.287 | $[0.247, 0.327]$ | 0.0% (58L - 42T) | 64 | 0 MB |
-| **B1** | Static User Profile | 0.557 | $[0.514, 0.601]$ | 42.0% (58L - 42W) | 103 | 0 MB |
-| **B2** | Retrieval-Augmented (RAG) | 0.269 | $[0.231, 0.308]$ | 0.0% (58L - 42T) | 370 | 0 MB |
-| **B3** | Dynamic Task-Only Extraction | 0.449 | $[0.410, 0.489]$ | 16.0% (58L - 16W - 26T) | 103 | 0 MB |
-| **B4** | **CAPL (Context-Aware, Proposed)** | **0.617** | **$[0.546, 0.687]$** | **58.0% Overall Win Rate** | **148** | **0 MB** |
-
-*Note: Peak VRAM reported above is in deterministic CPU verification mode. Under live 4-bit NF4 GPU execution, peak VRAM is **10.8 GB** on NVIDIA L4 (24 GB).*
-
----
-
-## 3. Hardware Requirements & L4 GPU Deployment
-
-This project is optimized for an **NVIDIA L4 GPU (24 GB VRAM)** on Google Colab or cloud instances:
-- **Quantization:** NormalFloat4 (NF4) with double quantization and bfloat16 compute.
-- **Preference Agent:** `Qwen/Qwen3.5-2B` (~1.3 GB VRAM).
-- **Main Generator:** `Qwen/Qwen3.5-9B` (~5.2 GB VRAM).
-- **Concurrent Footprint:** ~10.8 GB peak VRAM (over 55% free safety headroom).
-- **Sequential Fallback Mode:** Automatically unloads $M_{pref}$ and flushes CUDA memory before loading $M_{main}$ if VRAM < 16 GB, capping peak usage at **~7.3 GB**.
-
----
-
-## 4. Google Colab CLI & Local Execution Workflow
-
-### Step 1: Environment Setup
-Clone the repository and install dependencies using `uv` (recommended) or `pip`:
-
-```bash
-git clone https://github.com/your-org/capl.git
-cd capl
-
-# Fast setup with uv
-curl -LsSf https://astral.sh/uv/install.sh | sh
-uv venv --python python3.12 .venv
-source .venv/bin/activate
-uv pip install -e .
-```
-
-### Step 2: Run End-to-End Smoke Test
-Verify environment, memory tracking, and integration in 5 seconds:
-
-```bash
-python scripts/smoke_test.py
-```
-
-### Step 3: Run Primary Baselines Benchmark (B0 - B4)
-Run evaluation on 50 users with 20 historical interactions per user:
-
-```bash
-# In mock/verification mode (instant CPU/MPS execution):
-python scripts/run_baselines.py --users 50 --interactions 20 --mock
-
-# In live GPU mode (NVIDIA L4 with 4-bit NF4 weights):
-python scripts/run_baselines.py --users 50 --interactions 20 --live
-```
-
-Outputs will be saved in `results/baselines/`:
-- `summary.json`: Detailed means and 95% confidence intervals.
-- `raw_eval_records.csv`: Per-sample generation metrics and satisfaction scores.
-- `baseline_satisfaction_comparison.png`: Publication-ready comparison bar plot.
-
-### Step 4: Run Ablation Experiments
-Run history length sweeps ($N=5, 10, 20, 50$) and rule budget sweeps:
-
-```bash
-python scripts/run_experiments.py --users 20 --output-dir results/ablations
-```
-
----
-
-## 5. Repository Layout
-
-```text
-capl/
-├── README.md                           # Project documentation & benchmark tables
-├── pyproject.toml                      # Package specifications & build system
-├── requirements.txt                    # Pinned dependencies
-├── configs/
-│   └── experiment.yaml                 # Master configuration file
-├── docs/
-│   ├── literature_review.md            # Critical review of Shashidhar et al. 2024
-│   ├── methodology.md                  # Formal experimental methodology & math
-│   ├── model_verification.md           # HF model verification & L4 VRAM specs
-│   └── research_findings.md            # Empirical conclusions & Phase 6 QLoRA decision
-├── src/
-│   ├── models/
-│   │   └── loader.py                   # 4-bit NF4 quantized loader & sequential offloader
-│   ├── data/
-│   │   ├── synthetic.py                # Multi-context conflicting synthetic benchmark
-│   │   └── prepare.py                  # Dataset preparation and adapters
-│   ├── preferences/
-│   │   ├── extractor.py                # InferredPreferenceRule schema & persistent cache
-│   │   └── contextual.py               # B1, B3, and B4 (CAPL) extraction algorithms
-│   ├── baselines/
-│   │   ├── static.py                   # B1 Static Profile Baseline
-│   │   └── retrieval.py                # B2 Retrieval (RAG) Baseline
-│   ├── generation/
-│   │   └── generator.py                # End-to-end personalization pipeline
-│   ├── evaluation/
-│   │   ├── metrics.py                  # Precision, recall, deterministic checks, judge
-│   │   └── evaluate.py                 # Benchmark runner, CIs, and plot generator
-│   └── utils/
-│       └── memory.py                   # Hardware detection & peak VRAM tracker
-├── scripts/
-│   ├── smoke_test.py                   # Rapid integration verification script
-│   ├── run_baselines.py                # Primary B0-B4 evaluation script
-│   └── run_experiments.py              # Ablation sweep runner
-├── tests/                              # Pytest test suite (22 unit tests)
-└── results/                            # Benchmark outputs, CSVs, and PNG plots
-```
-
----
-
-## 6. Citation
-
-```bibtex
-@article{capl2026,
-  title={Context-Aware Unsupervised Human Preference Learning for Personalizing Frozen Language Models},
-  author={CAPL Research Group},
-  year={2026},
-  journal={arXiv preprint}
+```json
+{
+  "preference": "Use concise bullet points for technical debugging.",
+  "target_aspect": "structure",
+  "context_condition": "technical_engineering",
+  "supporting_evidence_ids": ["interaction_07"],
+  "conflict_detected": true
 }
 ```
+
+The context condition bounds the rule, the evidence identifiers trace it back to history, and the conflict flag records opposing patterns. The schema in code also carries a rule id, an uncalibrated confidence, optional conflict details and a recency weight.
+
+**Algorithmic fallback.** If extraction fails or its output cannot be parsed, a deterministic path derives style features from history. It partitions interactions by context and weights them with exponential half-life recency decay. Recency is therefore handled two ways: by instruction in the model path and by explicit weighting in the fallback.
+
+**Frozen generation.** Parsed rules are rendered as steering instructions and prepended to the query. The generator decodes greedily. Extraction results are cached per user, method and query.
+
+**Hardware.** Both models load with 4-bit NF4 quantization (double quantization, bfloat16 compute) on one L4. Peak PyTorch allocation in the live pilot was about 7,503 MiB. The loader can unload the preference agent before loading the generator when memory is tight, and it can substitute a mock model so the whole pipeline runs on CPU without weights.
+
+## Baselines
+
+Five methods differ only in the personalization input that reaches the generator's prompt.
+
+| ID | Method | Personalization input |
+|---|---|---|
+| B0 | No personalization | Current query only |
+| B1 | Static profile | Globally applicable inferred rules |
+| B2 | Retrieval | Up to three similar past interactions, ranked by TF-IDF cosine similarity over historical queries and context labels, under an approximate word budget |
+| B3 | Task-only extraction | Rules inferred for the current task, without a context condition |
+| B4 | CAPL | Rules scoped to the detected context |
+
+## Evaluation design
+
+**Synthetic personas.** Users are generated from templates with deliberately contrasting styles across contexts, plus configurable conflict and temporal drift. The intended preferences are known by construction. The live pilot used ten users, each with 20 historical interactions and two evaluation queries, giving 100 generations across the five methods.
+
+**Deterministic style checks.** Each persona specifies checkable aspects: word-count limits, bullet or numbered formatting, required salutation phrases and the presence of code. A response's score is the fraction of applicable checks it passes. A method's score is the mean over its queries. No LLM judge or human rater is involved.
+
+**Matched comparisons.** For every query, CAPL's score is compared with each other method's score on the same query and counted as higher, equal or lower. The code calls this a blinded pairwise judge. It randomizes presentation order but decides by the same deterministic scores. For rule-based methods (B1, B3, B4), the code also computes rule precision, recall and context accuracy against the synthetic ground truth.
+
+## Results
+
+Live pilot, 20 queries per method:
+
+| Method | Mean rule satisfaction |
+|---|---:|
+| B0 No personalization | 48.75% |
+| B1 Static profile | 58.33% |
+| B2 TF-IDF retrieval | **88.33%** |
+| B3 Task-only rules | 56.67% |
+| B4 CAPL | 71.25% |
+
+By context (ten technical queries and five executive and five casual queries per method):
+
+| Context | Static profile | Retrieval | CAPL |
+|---|---:|---:|---:|
+| Technical engineering | 46.7% | 76.7% | 47.5% |
+| Executive briefing | 80.0% | 100.0% | 90.0% |
+| Casual chat | 60.0% | 100.0% | 100.0% |
+
+Matched comparisons, CAPL against each method:
+
+| CAPL compared with | Higher | Equal | Lower |
+|---|---:|---:|---:|
+| No personalization | 11 | 5 | 4 |
+| Static profile | 8 | 8 | 4 |
+| TF-IDF retrieval | 1 | 9 | 10 |
+| Task-only rules | 9 | 7 | 4 |
+
+Among the rule-based methods, the scoped one scores highest. Its gain over the static profile comes entirely from executive and casual queries. On technical queries it is no better than a static profile, and task-only rules (58.3%) score higher. Retrieval beats every rule-based method. Showing the generator past responses keeps exact salutations, lengths and formatting that a short extracted rule can drop. The open question is which preference information survives extraction.
+
+## Repository map
+
+| Path | Role |
+|---|---|
+| `src/data/` | Synthetic persona and history generator (`synthetic.py`), dataset preparation (`prepare.py`) |
+| `src/preferences/` | Rule schema and extraction cache (`extractor.py`); context classifier, extraction prompts, JSON parsing and the B1, B3 and B4 extractors with their fallbacks (`contextual.py`) |
+| `src/baselines/` | Static profile (B1) prompt formatting and TF-IDF retrieval (B2) |
+| `src/generation/` | `PersonalizationPipeline`: builds the prompt for each method and calls the generator |
+| `src/models/` | Quantized loader, model manager with optional sequential unloading, and the mock model |
+| `src/evaluation/` | Deterministic satisfaction checks, matched comparison, inference metrics, confidence intervals (`metrics.py`); benchmark runner, CSV/JSON export and plots (`evaluate.py`) |
+| `src/utils/` | Hardware detection and peak memory tracking |
+| `scripts/` | Entry points: smoke test, B0 to B4 benchmark, ablation sweeps |
+| `configs/experiment.yaml` | Model ids and fallbacks, quantization and decoding settings, dataset and ablation parameters |
+| `tests/` | Unit tests |
+| `results/` | Summaries, per-sample records and plots from mock-mode runs |
+
+## Orientation for agents
+
+Start with the three scripts in `scripts/`. `smoke_test.py` runs the full pipeline on two users with the mock model. `run_baselines.py` runs B0 to B4 and writes `summary.json`, `raw_eval_records.csv` and a comparison plot. It defaults to mock mode, and a live flag loads the quantized models on a GPU. `run_experiments.py` sweeps history length, rule limit, token budget and drift rate, and it also runs mock by default. From there, follow `src/generation/generator.py`, which dispatches on the baseline id, to the extractors in `src/preferences/contextual.py` and to `src/evaluation/evaluate.py`, which loops over users, samples and methods.
+
+Settings live in `configs/experiment.yaml`. Some of its defaults (50 users, four test queries per user, four contexts) describe the synthetic generator's capacity, not the live pilot, which used ten users and two queries each.
+
+Every file under `results/` (`smoke_test/`, `baselines/` and `ablations/`) comes from mock-mode runs. The mock model returns templated text, so latency and memory read as zero. Those numbers check that the pipeline works end to end. They are not findings, and they do not match the live pilot. For example, retrieval scores lowest in the mock baselines and highest live. The live pilot numbers in this README come from the write-up. The live per-generation records are not in this repository.
+
+The tests cover the rule schema and its validation, the extraction cache, the B1, B3 and B4 extractors (algorithmic and model-driven via the mock), tolerant JSON parsing of model output, token budget handling in steering prompts, the static and retrieval baselines, synthetic data generation and serialization, the deterministic checks, the matched comparison, inference metrics, confidence intervals and mock model loading and unloading. None of them load real weights.
+
+
+## Limitations
+
+- **Synthetic users and automated scoring.** The results measure compliance with deterministic style checks on template personas. They do not establish human preference, factual correctness or usefulness.
+- **Small sample.** There were 20 queries per method, with five or ten per context. The means are descriptive, and no significance test is reported.
+- **Overlapping queries.** Histories and evaluation queries share a small template pool, so the pilot does not test generalization to unseen topics.
+- **No live ablations.** The separate effects of context scoping and recency were not isolated on real models. The ablation sweeps in `results/` are mock-mode only.
+- **Cost figures are partial.** Token counts are word-based estimates for the generator only and exclude preference-agent tokens.
+
+## License
+
+Code and results are released under the [Apache License 2.0](LICENSE). See [NOTICE](NOTICE).
+
+## Citation
+
+```bibtex
+@misc{chawla2026capl,
+  author       = {Naman Chawla},
+  title        = {CAPL: Context-Aware Preference Rules for Steering a Frozen LLM},
+  year         = {2026},
+  howpublished = {\url{https://palindromerice.github.io/writing/capl/}}
+}
+```
+
+Machine-readable citation metadata is in [CITATION.cff](CITATION.cff).
