@@ -2,7 +2,9 @@
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-green.svg)](LICENSE)
 
-CAPL (Context-Aware Preference Learning) is research code for an exploratory pilot. A small model (Qwen3.5-2B) reads a user's history and writes natural-language preference rules, each scoped to the context where it applies, and those rules steer a frozen generator (Qwen3.5-9B) through its prompt. In a live pilot with ten synthetic users, CAPL reached 71.25% mean style-rule satisfaction versus 58.33% for a static profile and 48.75% for no personalization, while TF-IDF retrieval of past examples scored highest at 88.33%. Article: [CAPL: Context-Aware Preference Rules for Steering a Frozen LLM](https://palindromerice.github.io/writing/capl/) on palindromerice.github.io.
+CAPL (Context-Aware Preference Learning) is research code for an exploratory pilot. A small model (Qwen3.5-2B) reads a user's history and writes natural-language preference rules, each scoped to the context where it applies, and those rules steer a frozen generator (Qwen3.5-9B) through its prompt. In a live pilot with ten synthetic users, CAPL reached 71.25% mean style-rule satisfaction versus 58.33% for a static profile and 48.75% for no personalization, while TF-IDF retrieval of past examples scored highest at 88.33%.
+
+Research article: [CAPL: Context-Aware Preference Rules for Steering a Frozen LLM](https://palindromerice.github.io/writing/capl/)
 
 ## Why
 
