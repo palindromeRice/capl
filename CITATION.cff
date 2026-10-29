@@ -1,0 +1,16 @@
+cff-version: 1.2.0
+message: "If you use this software or its results, please cite it as below."
+title: "CAPL"
+authors:
+  - family-names: Chawla
+    given-names: Naman
+repository-code: "https://github.com/palindromeRice/capl"
+license: Apache-2.0
+preferred-citation:
+  type: article
+  title: "CAPL: Context-Aware Preference Rules for Steering a Frozen LLM"
+  authors:
+    - family-names: Chawla
+      given-names: Naman
+  year: 2026
+  url: "https://palindromerice.github.io/writing/capl/"

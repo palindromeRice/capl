@@ -1,0 +1,13 @@
+CAPL
+Copyright 2026 Naman Chawla
+
+This product includes software developed by Naman Chawla
+(https://github.com/palindromeRice/capl).
+
+If you use this code, its results, or derived work in a publication,
+please cite:
+
+  Naman Chawla. 2026. CAPL: Context-Aware Preference Rules for Steering a Frozen LLM.
+  https://palindromerice.github.io/writing/capl/
+
+Citation metadata is in CITATION.cff.
